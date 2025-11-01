@@ -67,8 +67,8 @@ const char* path = "..";
 TH1* histograms[NKT][NFRAME];
 Levy_reader* myLevy_reader;
 
-const double rfitmax = 100.; // TODO make adjustable for kT/cent/... & incr/decr if fit does not converge
-const double rfitmin = 5.;
+double rfitmax = 100.; // TODO make adjustable for kT/cent/... & incr/decr if fit does not converge
+double rfitmin = 5.;
 
 int thiskt = 0;
 int thisframe = 0;
@@ -258,6 +258,7 @@ int main(int argc, char *argv[])
   {
     //int firstfile = 0;
     //if(!(ifile%20 == 1 || ifile%20 == 2)) continue;
+    bool stillAveraging = true;
     for(int ievt = 0; ievt < NEVT; ievt++)
     {
       //int firstevt = 0;
@@ -333,6 +334,7 @@ int main(int argc, char *argv[])
             {
               continue; // do until last one of averaging
             }
+            stillAveraging = false; // last one of averaging done
           }
           
           // Print some information about the histogram
@@ -396,13 +398,21 @@ int main(int argc, char *argv[])
           // Take care of "bad" fits
           cout << "CovMatrixStatus: " << minimizer->CovMatrixStatus() << endl;
           cout << "Status: " << minimizer->Status() << endl;
-          double confidence = chi2val / NDF;          
+          double confidence = chi2val / NDF;
+          cout << "Confidence: " << confidence << endl;      
           if(minimizer->CovMatrixStatus() != 3 || minimizer->Status() > 1 || 
           results[0] < 0.55 || results[0] > 1.95 || results[1] < 0.05 || results[1] > 14.95 ||
-          (NEVT_AVG==1 && confidence < 0.01) || static_cast<Double_t>(binsInRange) * 0.5 > hitsInRange) // FIXME * 3 maybe too strict?; confidence < 0.01 should not be checked when averaged!!!
+          (NEVT_AVG==1 && confidence < 0.01)) // confidence < 0.01 should not be checked when averaged
           {
             NDF=0; // prbably not needed, but just in case
             cout << "Bad fit, skipping..." << endl;
+            delete minimizer;
+            continue;
+          }
+          if(static_cast<Double_t>(binsInRange) * 0.5 > hitsInRange) // * 3 maybe too strict?;
+          {
+            NDF=0; // prbably not needed, but just in case
+            cout << "Too few hits in histogram to fit, skipping..." << endl;
             delete minimizer;
             continue;
           }
@@ -535,9 +545,10 @@ int main(int argc, char *argv[])
           //Tl.SetTextSize(20);
           //Tl.DrawLatex(0.05, 0.94, Form("EPOS4 200 GeV %s%% AuAu PION PAIR SOURCE, #LTm_{T}#GT = %1.3f, LCMS", centleg[ICENT],sqrt(Mass2_pi+SQR(0.5*(ktbins[ikt]+ktbins[ikt+1]))) ) );
           //if(ievt == 10 && ifile == 1) canvas->SaveAs(Form("%s/figs/fitting/%s/onedsource_cent%s_%s_ifile%i_ievt%i_ikt%i_ich0.png", path, frames[thisframe], centleg[ICENT], energy, ifile, ievt, ikt));
-          if(firstplot==true) // && ievt%10 == 0 && ikt == 2 && entries > 100 // !!! FIXME from if(true) 
+          if(true) // && ievt%10 == 0 && ikt == 2 && entries > 100 // !!! FIXME from if(true) to if(firstplot==true)
           {
-            canvas->SaveAs(Form("%s/figs/fitting/%s/%s_onedsource_cent%s_%s_ifile%i_ievt%i_ikt%i_ich0.png", path, isPathUrqmd, frames[thisframe], centleg[ICENT], energy, ifile, ievt, ikt));
+            canvas->SaveAs(Form("%s/figs/fitting/%s/%s_onedsource_cent%s_%s_ifile%i_ievt%i_ikt%i_ich0_AVG%d.png", 
+                                path, frames[thisframe], isPathUrqmd, centleg[ICENT], energy, ifile, ievt, ikt, NEVT_AVG));
             firstplot = false;
           }
         } // end of iframe loop
@@ -555,11 +566,12 @@ int main(int argc, char *argv[])
       N_vs_kt->SetTitle(Form("#N(K_{T}), #sqrt{s_{NN}}=%s;K_{T} (GeV/c);#N",energy));
       N_vs_kt->SetName(Form("N_vs_kt_%d", Ngoodfits));
 
+      if(stillAveraging) continue; // if still averaging, do not save anything
       alpha_vs_KT_all.push_back(alpha_vs_kt);
       R_vs_KT_all.push_back(R_vs_kt);
       N_vs_KT_all.push_back(N_vs_kt);
       
-      Ngoodfits++;
+      Ngoodfits++; // does this even count anything useful?
     } // end of ievt loop
   } // end of ifile loop
   delete canvas;
@@ -569,7 +581,8 @@ int main(int argc, char *argv[])
   delete file;
   cout << "input file closed, delete done." << endl;
 
-  TFile* file_output = new TFile(Form("./results/%s_onedfitresults_%s_cent%s_%s.root", isPathUrqmd, frames[thisframe],centleg[ICENT],energy), "RECREATE"); // Compare with Yan, add:  _Yan
+  TFile* file_output = new TFile(Form("./results/%s_onedfitresults_%s_cent%s_%s_AVG%d.root", 
+                                      isPathUrqmd, frames[thisframe],centleg[ICENT],energy,NEVT_AVG), "RECREATE"); // Compare with Yan, add:  _Yan
   cout << "output file created." << endl;
   file_output->cd();
   cout << "output file cd() done." << endl;
