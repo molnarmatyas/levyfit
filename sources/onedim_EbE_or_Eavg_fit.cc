@@ -133,6 +133,45 @@ double logLikelihood(const double *params)
   return 2.0 * logL;
 }
 
+void Drho_from_rhohist(TH1* hist)
+{
+  // Create D(rho) from rho histogram
+  double integral = hist->Integral();//0,histograms[ikt][iframe][iosl]->GetNbinsX()+1);
+  for (int x = 1; x <= hist->GetNbinsX(); ++x)
+  {
+    double content = hist->GetBinContent(x);
+    double error = hist->GetBinError(x);
+    double binVolume = hist->GetXaxis()->GetBinWidth(x);
+    hist->SetBinContent(x, content / binVolume);
+    hist->SetBinError(x, error / binVolume);
+  }
+  TF1* f_r2 = new TF1("f_r2","1./x/x/4./pi",0.,1.e8);
+  hist->Multiply(f_r2,1.);
+  hist->Scale(1.0 / integral);
+  delete f_r2;
+
+  hist->SetStats(0);
+  hist->SetTitle("");
+  //hist->SetTitle(Form("EPOS4 pion-pion pair source, k_{T} #in [%.2f, %.2f] GeV/c, #sqrt{s_{NN}} = %s, %s%%", ktbins[ikt], ktbins[ikt + 1], energy, centleg[ICENT]));
+  hist->GetXaxis()->SetRangeUser(0.2,5000.);//0.1,1000.); // Compare with Yan
+  //hist->GetXaxis()->SetTitleSize(0.1);
+  //hist->GetYaxis()->SetTitleSize(0.1);
+  //hist->GetYaxis()->SetLabelSize(0.08);
+  hist->GetYaxis()->SetTitle("D(#rho)");
+  //hist->GetYaxis()->SetTitleOffset(0.9);
+  hist->GetXaxis()->SetTitle("#rho [fm]");
+  //hist->GetXaxis()->SetTitleOffset(0.7);
+  hist->SetMinimum(5.e-13); // -12 FIXED
+  hist->SetMaximum(1.e-2);
+  
+  hist->GetXaxis()->SetTitleSize(0.05);
+  hist->GetYaxis()->SetTitleSize(0.05);
+  hist->GetXaxis()->SetLabelSize(0.04);
+  hist->GetYaxis()->SetLabelSize(0.04);
+  hist->GetYaxis()->SetTitleOffset(1.5);
+  hist->GetXaxis()->SetTitleOffset(1.2);
+}
+
 int main(int argc, char *argv[])
 {
   // Default args
@@ -252,6 +291,18 @@ int main(int argc, char *argv[])
 
   //TH3F* sourcehists[NKT][NFRAME];
   TCanvas* canvas = new TCanvas("c1", "", 600, 600);//1200, 800); // Compare with Yan
+  // Canvas setup
+  gStyle->SetLabelSize(0.04, "XY"); // Set label size for both axes
+  gStyle->SetTitleSize(0.05, "XY"); // Set title size for both axes
+  gStyle->SetTitleOffset(1.2, "X"); // Adjust X-axis title offset
+  gStyle->SetTitleOffset(1.5, "Y"); // Adjust Y-axis title offset
+  
+  canvas->SetLogx(1);
+  canvas->SetLogy(1);
+  canvas->SetRightMargin(0.05);
+  canvas->SetLeftMargin(0.15);
+  canvas->SetTopMargin(0.10);
+  canvas->SetBottomMargin(0.15);
 
   bool firstplot = true;
   for(int ifile = 1; ifile < NFILEMAX + 1; ifile++) // sorry, the files coming out from the simulation were indexed from 1, I feel too lazy to change everything
@@ -406,6 +457,13 @@ int main(int argc, char *argv[])
           {
             NDF=0; // prbably not needed, but just in case
             cout << "Bad fit, skipping..." << endl;
+            if(firstplot==true)
+            {
+              Drho_from_rhohist(histograms[ikt][iframe]);
+              histograms[ikt][iframe]->Draw("pe");
+              canvas->SaveAs(Form("%s/figs/fitting/%s/%s_onedsource_cent%s_%s_ifile%i_ievt%i_ikt%i_ich0_AVG%d_BADFIT.png", 
+                                path, frames[thisframe], isPathUrqmd, centleg[ICENT], energy, ifile, ievt, ikt, NEVT_AVG));
+            }
             delete minimizer;
             continue;
           }
@@ -413,6 +471,13 @@ int main(int argc, char *argv[])
           {
             NDF=0; // prbably not needed, but just in case
             cout << "Too few hits in histogram to fit, skipping..." << endl;
+            if(firstplot==true)
+            {
+              Drho_from_rhohist(histograms[ikt][iframe]);
+              histograms[ikt][iframe]->Draw("pe");
+              canvas->SaveAs(Form("%s/figs/fitting/%s/%s_onedsource_cent%s_%s_ifile%i_ievt%i_ikt%i_ich0_AVG%d_CANTFIT.png", 
+                                path, frames[thisframe], isPathUrqmd, centleg[ICENT], energy, ifile, ievt, ikt, NEVT_AVG));
+            }
             delete minimizer;
             continue;
           }
@@ -426,6 +491,7 @@ int main(int argc, char *argv[])
           canvas->SetTopMargin(0.01);
           canvas->SetBottomMargin(0.15);
           */
+          /*
           gStyle->SetLabelSize(0.04, "XY"); // Set label size for both axes
           gStyle->SetTitleSize(0.05, "XY"); // Set title size for both axes
           gStyle->SetTitleOffset(1.2, "X"); // Adjust X-axis title offset
@@ -437,41 +503,11 @@ int main(int argc, char *argv[])
           canvas->SetLeftMargin(0.15);
           canvas->SetTopMargin(0.10);
           canvas->SetBottomMargin(0.15);
+          */
 
           // Here, among others, creating D(rho) from rho hists (normalising to 1)
-          double integral = histograms[ikt][iframe]->Integral();//0,histograms[ikt][iframe][iosl]->GetNbinsX()+1);
-          for (int x = 1; x <= histograms[ikt][iframe]->GetNbinsX(); ++x)
-          {
-            double content = histograms[ikt][iframe]->GetBinContent(x);
-            double error = histograms[ikt][iframe]->GetBinError(x);
-            double binVolume = histograms[ikt][iframe]->GetXaxis()->GetBinWidth(x);
-            histograms[ikt][iframe]->SetBinContent(x, content / binVolume);
-            histograms[ikt][iframe]->SetBinError(x, error / binVolume);
-          }
-          TF1* f_r2 = new TF1("f_r2","1./x/x/4./pi",0.,1.e8);
-          histograms[ikt][iframe]->Multiply(f_r2,1.);
-          histograms[ikt][iframe]->Scale(1.0 / integral);
-          delete f_r2;
-          histograms[ikt][iframe]->SetStats(0);
-          histograms[ikt][iframe]->SetTitle("");
-          //histograms[ikt][iframe]->SetTitle(Form("EPOS4 pion-pion pair source, k_{T} #in [%.2f, %.2f] GeV/c, #sqrt{s_{NN}} = %s, %s%%", ktbins[ikt], ktbins[ikt + 1], energy, centleg[ICENT]));
-          histograms[ikt][iframe]->GetXaxis()->SetRangeUser(0.2,5000.);//0.1,1000.); // Compare with Yan
-          //histograms[ikt][iframe]->GetXaxis()->SetTitleSize(0.1);
-          //histograms[ikt][iframe]->GetYaxis()->SetTitleSize(0.1);
-          //histograms[ikt][iframe]->GetYaxis()->SetLabelSize(0.08);
-          histograms[ikt][iframe]->GetYaxis()->SetTitle("D(#rho)");
-          //histograms[ikt][iframe]->GetYaxis()->SetTitleOffset(0.9);
-          histograms[ikt][iframe]->GetXaxis()->SetTitle("#rho [fm]");
-          //histograms[ikt][iframe]->GetXaxis()->SetTitleOffset(0.7);
-          histograms[ikt][iframe]->SetMinimum(5.e-13); // -12 FIXED
-          histograms[ikt][iframe]->SetMaximum(1.e-2);
+          Drho_from_rhohist(histograms[ikt][iframe]);
           
-          histograms[ikt][iframe]->GetXaxis()->SetTitleSize(0.05);
-          histograms[ikt][iframe]->GetYaxis()->SetTitleSize(0.05);
-          histograms[ikt][iframe]->GetXaxis()->SetLabelSize(0.04);
-          histograms[ikt][iframe]->GetYaxis()->SetLabelSize(0.04);
-          histograms[ikt][iframe]->GetYaxis()->SetTitleOffset(1.5);
-          histograms[ikt][iframe]->GetXaxis()->SetTitleOffset(1.2);
           
           TF1* f_levyfunc = new TF1(Form("levyfunc%i",iframe), fitFunction, 0.1, 5000., 3);
           f_levyfunc->SetParNames("alpha","R","norm");
@@ -545,11 +581,11 @@ int main(int argc, char *argv[])
           //Tl.SetTextSize(20);
           //Tl.DrawLatex(0.05, 0.94, Form("EPOS4 200 GeV %s%% AuAu PION PAIR SOURCE, #LTm_{T}#GT = %1.3f, LCMS", centleg[ICENT],sqrt(Mass2_pi+SQR(0.5*(ktbins[ikt]+ktbins[ikt+1]))) ) );
           //if(ievt == 10 && ifile == 1) canvas->SaveAs(Form("%s/figs/fitting/%s/onedsource_cent%s_%s_ifile%i_ievt%i_ikt%i_ich0.png", path, frames[thisframe], centleg[ICENT], energy, ifile, ievt, ikt));
-          if(true) // && ievt%10 == 0 && ikt == 2 && entries > 100 // !!! FIXME from if(true) to if(firstplot==true)
+          if(firstplot==true) // && ievt%10 == 0 && ikt == 2 && entries > 100 // !!! FIXME from if(true) to if(firstplot==true)
           {
             canvas->SaveAs(Form("%s/figs/fitting/%s/%s_onedsource_cent%s_%s_ifile%i_ievt%i_ikt%i_ich0_AVG%d.png", 
                                 path, frames[thisframe], isPathUrqmd, centleg[ICENT], energy, ifile, ievt, ikt, NEVT_AVG));
-            firstplot = false;
+            //firstplot = false;
           }
         } // end of iframe loop
         canvas->Clear();
@@ -572,6 +608,7 @@ int main(int argc, char *argv[])
       N_vs_KT_all.push_back(N_vs_kt);
       
       Ngoodfits++; // does this even count anything useful?
+      firstplot = false; // do not plot more than 1 from each kT
     } // end of ievt loop
   } // end of ifile loop
   delete canvas;
