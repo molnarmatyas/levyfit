@@ -46,6 +46,7 @@ const int NCH = 2;
 const int NCENT = 10; // number of centrality classes
 const char* centleg[NCENT+2] = {"0-5", "5-10", "10-20", "20-30", "30-40", "40-50", "50-60", "60-70", "70-80", "80-100","all","0-10"};
 const int colors[NKT] = {632,416,600,432,616,400,8,9,42,46};
+bool ikt_plotted[NKT] = {false}; // Track which ikt values have been plotted
 const double ktbins[NKT + 1] = {0.175,0.225,0.275,0.325,0.375,0.425,0.475,0.525,0.575,0.625,0.675};
 //const double ktbins[NKT + 1] = {0.175,0.200,0.225,0.250,0.275,0.300,0.325,0.350,0.375,0.400,0.425,0.450,0.475,0.500,0.525,0.550,0.575};
 const int linestyles[NCENT] = {1,9,7,1};
@@ -457,12 +458,13 @@ int main(int argc, char *argv[])
           {
             NDF=0; // prbably not needed, but just in case
             cout << "Bad fit, skipping..." << endl;
-            if(firstplot==true)
+            if(!ikt_plotted[ikt])
             {
               Drho_from_rhohist(histograms[ikt][iframe]);
               histograms[ikt][iframe]->Draw("pe");
               canvas->SaveAs(Form("%s/figs/fitting/%s/%s_onedsource_cent%s_%s_ifile%i_ievt%i_ikt%i_ich0_AVG%d_BADFIT.png", 
                                 path, frames[thisframe], isPathUrqmd, centleg[ICENT], energy, ifile, ievt, ikt, NEVT_AVG));
+              ikt_plotted[ikt] = true;
             }
             delete minimizer;
             continue;
@@ -471,12 +473,13 @@ int main(int argc, char *argv[])
           {
             NDF=0; // prbably not needed, but just in case
             cout << "Too few hits in histogram to fit, skipping..." << endl;
-            if(firstplot==true)
+            if(!ikt_plotted[ikt])
             {
               Drho_from_rhohist(histograms[ikt][iframe]);
               histograms[ikt][iframe]->Draw("pe");
               canvas->SaveAs(Form("%s/figs/fitting/%s/%s_onedsource_cent%s_%s_ifile%i_ievt%i_ikt%i_ich0_AVG%d_CANTFIT.png", 
                                 path, frames[thisframe], isPathUrqmd, centleg[ICENT], energy, ifile, ievt, ikt, NEVT_AVG));
+              ikt_plotted[ikt] = true;
             }
             delete minimizer;
             continue;
@@ -581,11 +584,11 @@ int main(int argc, char *argv[])
           //Tl.SetTextSize(20);
           //Tl.DrawLatex(0.05, 0.94, Form("EPOS4 200 GeV %s%% AuAu PION PAIR SOURCE, #LTm_{T}#GT = %1.3f, LCMS", centleg[ICENT],sqrt(Mass2_pi+SQR(0.5*(ktbins[ikt]+ktbins[ikt+1]))) ) );
           //if(ievt == 10 && ifile == 1) canvas->SaveAs(Form("%s/figs/fitting/%s/onedsource_cent%s_%s_ifile%i_ievt%i_ikt%i_ich0.png", path, frames[thisframe], centleg[ICENT], energy, ifile, ievt, ikt));
-          if(firstplot==true) // && ievt%10 == 0 && ikt == 2 && entries > 100 // !!! FIXME from if(true) to if(firstplot==true)
+          if(!ikt_plotted[ikt])
           {
             canvas->SaveAs(Form("%s/figs/fitting/%s/%s_onedsource_cent%s_%s_ifile%i_ievt%i_ikt%i_ich0_AVG%d.png", 
                                 path, frames[thisframe], isPathUrqmd, centleg[ICENT], energy, ifile, ievt, ikt, NEVT_AVG));
-            //firstplot = false;
+            ikt_plotted[ikt] = true;
           }
         } // end of iframe loop
         canvas->Clear();
