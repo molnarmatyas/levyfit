@@ -594,6 +594,7 @@ int main(int argc, char *argv[])
         canvas->Clear();
       } // end of ikt loop
       
+      if(stillAveraging) continue; // if still averaging, do not save anything
       // new TGraphAsymmErrors + put in the vector
       TGraphAsymmErrors* alpha_vs_kt = new TGraphAsymmErrors(NKT, ktbin_centers, alpha_vec, xLow, xHigh, alpha_errdn_vec, alpha_errup_vec);
       alpha_vs_kt->SetTitle(Form("#alpha(K_{T}), #sqrt{s_{NN}}=%s;K_{T} (GeV/c);#alpha",energy));
@@ -605,7 +606,7 @@ int main(int argc, char *argv[])
       N_vs_kt->SetTitle(Form("#N(K_{T}), #sqrt{s_{NN}}=%s;K_{T} (GeV/c);#N",energy));
       N_vs_kt->SetName(Form("N_vs_kt_%d", Ngoodfits));
 
-      if(stillAveraging) continue; // if still averaging, do not save anything
+      //if(stillAveraging) continue; // if still averaging, do not save anything
       alpha_vs_KT_all.push_back(alpha_vs_kt);
       R_vs_KT_all.push_back(R_vs_kt);
       N_vs_KT_all.push_back(N_vs_kt);
@@ -641,6 +642,7 @@ int main(int argc, char *argv[])
   for(size_t i=0; i<alpha_vs_KT_all.size(); i++)
   {
     //cout << "i: " << i << endl;
+    // TODO maybe instead of writing out all, average them first?
     alpha_vs_KT_all[i]->Write();
     R_vs_KT_all[i]->Write();
     N_vs_KT_all[i]->Write();
