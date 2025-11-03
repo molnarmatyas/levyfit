@@ -524,6 +524,7 @@ int main(int argc, char *argv[])
 
           alphahist[ikt]->Fill(alpha);
           Rhist[ikt]->Fill(R);
+          cerr << "Filling alpha vs R histogram ikt " << ikt << " with alpha,R: " << alpha << "," << R << endl;
           alpha_vs_R[ikt]->Fill(alpha,R);
           alpha_vs_R_all->Fill(alpha,R);
 
