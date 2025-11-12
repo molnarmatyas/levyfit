@@ -35,19 +35,20 @@
 #define SQR(x)  ((x)*(x))
 #define CUBE(x) ((x)*(x)*(x))
 #include <TLatex.h>
+#include "../../header_for_all_emissionsource.h"
 
 using namespace std;
 
 // Global variables
-const double Mass2_pi = 0.019479835;
-const int NKT = 10;
+//const double Mass2_pi = 0.019479835;
+//const int NKT = 10;
+//const double ktbins[NKT + 1] = {0.175,0.225,0.275,0.325,0.375,0.425,0.475,0.525,0.575,0.625,0.675};
 const int NFRAME = 3;
 const int NCH = 2;
 const int NCENT = 10; // number of centrality classes
 const char* centleg[NCENT+2] = {"0-5", "5-10", "10-20", "20-30", "30-40", "40-50", "50-60", "60-70", "70-80", "80-100","all","0-10"};
-const int colors[NKT] = {632,416,600,432,616,400,8,9,42,46};
+//const int colors[NKT] = {632,416,600,432,616,400,8,9,42,46};
 bool ikt_plotted[NKT] = {false}; // Track which ikt values have been plotted
-const double ktbins[NKT + 1] = {0.175,0.225,0.275,0.325,0.375,0.425,0.475,0.525,0.575,0.625,0.675};
 //const double ktbins[NKT + 1] = {0.175,0.200,0.225,0.250,0.275,0.300,0.325,0.350,0.375,0.400,0.425,0.450,0.475,0.500,0.525,0.550,0.575};
 const int linestyles[NCENT] = {1,9,7,1};
 const int markerstyles[NCENT] = {20,21,34,24};
