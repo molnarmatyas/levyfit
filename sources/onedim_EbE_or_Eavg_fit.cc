@@ -253,7 +253,7 @@ int main(int argc, char *argv[])
     xLow[ikt] = binWidth / 2.;
     xHigh[ikt] = binWidth / 2.;
   }
-  Double_t alpha_vec[NKT]={0};
+  Double_t alpha_vec[NKT]={0};  // FIXME these are in the wrong place initialised - in each bad fit they inherit the previous good fit's value I think!!!
   Double_t alpha_errup_vec[NKT]={0};
   Double_t alpha_errdn_vec[NKT]={0};
   Double_t R_vec[NKT]={0};
