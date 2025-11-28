@@ -545,7 +545,7 @@ int main(int argc, char *argv[])
           }
           
           // SAVING results
-          Ngoodfits++;
+          //Ngoodfits++; // FIXME uncomment this if needed
           alphahist[ikt]->Fill(alpha);
           Rhist[ikt]->Fill(R);
           Nhist[ikt]->Fill(N);
