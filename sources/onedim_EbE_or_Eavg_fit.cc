@@ -76,6 +76,17 @@ int thiskt = 0;
 int thisframe = 0;
 int NDF = 0;
 
+const char* statuses[6] = {"converged",
+                           "cov._made_pos.def.",
+                           "Hesse_invalid",
+                           "Edm_above_max",
+                           "call_lim._reached",
+                           "other_failure"};
+const char* covstatuses[4] = {"not_calculated",
+                              "approximated",
+                              "forced_pos.def.",
+                              "accurate"};
+
 // Define the fit function
 double fitFunction(const double *x, const double *par)
 {
@@ -240,8 +251,10 @@ int main(int argc, char *argv[])
 
   TH1* alphahist[NKT];
   TH1* Rhist[NKT];
+  TH1* Nhist[NKT];
   TH2* alpha_vs_R[NKT];
   TH2F* alpha_vs_R_all = new TH2F("alpha_vs_R_all","",100,0.6,1.8,100,2.5,11.);
+  TH1* confidencehist = new TH1F("confidencehist","",100,0.,1.);
   // Temporary storages
   // For writing the vectors into TGraphAsymmErrors
   Double_t ktbin_centers[NKT], xLow[NKT], xHigh[NKT];//, binWidths[NKT];
@@ -280,6 +293,7 @@ int main(int argc, char *argv[])
   {
     alphahist[ikt] = new TH1F(Form("alphahist_ikt%i",ikt),"",100,0.,2.);
     Rhist[ikt] = new TH1F(Form("Rhist_ikt%i",ikt),"",100,2.5,15.);
+    Nhist[ikt] = new TH1F(Form("Nhist_ikt%i",ikt),"",100,0.85,1.15);
     alpha_vs_R[ikt] = new TH2F(Form("alpha_vs_R_ikt%i",ikt),"",100,0.,2.,100,2.5,11.);
   }
   // Open the file and get the histograms
@@ -306,15 +320,12 @@ int main(int argc, char *argv[])
   canvas->SetTopMargin(0.10);
   canvas->SetBottomMargin(0.15);
 
-  bool firstplot = true;
-  for(int ifile = 1; ifile < NFILEMAX + 1; ifile++) // sorry, the files coming out from the simulation were indexed from 1, I feel too lazy to change everything
+  for(int ifile = 1; ifile < NFILEMAX + 1; ifile++) // files were indexed from 1
   {
-    //int firstfile = 0;
-    //if(!(ifile%20 == 1 || ifile%20 == 2)) continue;
-    bool stillAveraging = true;
     for(int ievt = 0; ievt < NEVT; ievt++)
     {
-      //int firstevt = 0;
+      bool averagingComplete = false; // NEW: track if this is the last event of averaging block
+      
       for (int ikt = 0; ikt < NKT; ++ikt)
       {
         cout << "ifile,ievt,ikt: " << ifile << "," << ievt << "," << ikt << "," << endl;
@@ -387,7 +398,7 @@ int main(int argc, char *argv[])
             {
               continue; // do until last one of averaging
             }
-            stillAveraging = false; // last one of averaging done
+            averagingComplete = true; // Set when last event of block reached
           }
           
           // Print some information about the histogram
@@ -418,7 +429,8 @@ int main(int argc, char *argv[])
           //minimizer->SetFixedVariable(4, "N_out", 1.);
           //minimizer->SetFixedVariable(5, "N_side", 1.);
           //minimizer->SetFixedVariable(6, "N_long", 1.);
-          minimizer->SetVariable(2, "N", 1., 0.01);
+          minimizer->SetVariable(2, "N", 1., 0.01); // this likes to become negative, not good
+          minimizer->SetLimitedVariable(2, "N", 1.0, 0.001, 0.0, 2.0);
         
           // Minimize the function
           minimizer->Minimize();
@@ -434,6 +446,7 @@ int main(int argc, char *argv[])
           std::cout << "N "       << results[2] << std::endl;
           std::cout << "chi2: "   << chi2val << std::endl;
 
+          // FIND OUT IF: BAD FITS
           // Find out hits in a given range vs. number of bins
           int nBins = histograms[ikt][iframe]->GetNbinsX();
           Int_t binsInRange = 0;
@@ -448,67 +461,23 @@ int main(int argc, char *argv[])
               hitsInRange += histograms[ikt][iframe]->GetBinContent(i);
             }
           }
-          // Take care of "bad" fits
-          cout << "CovMatrixStatus: " << minimizer->CovMatrixStatus() << endl;
-          cout << "Status: " << minimizer->Status() << endl;
+          // Fit statuses
+          int fitCovStatus = minimizer->CovMatrixStatus();
+          int fitStatus = minimizer->Status();
+          cout << "CovMatrixStatus: " << fitCovStatus << " (" << covstatuses[fitCovStatus] << ")"<< endl;
+          cout << "Status: " << fitStatus << " (" << statuses[fitStatus] << ")"<< endl;
           double confidence = chi2val / NDF;
-          cout << "Confidence: " << confidence << endl;      
-          if(minimizer->CovMatrixStatus() != 3 || minimizer->Status() > 1 || 
-          results[0] < 0.55 || results[0] > 1.95 || results[1] < 0.05 || results[1] > 14.95 ||
-          (NEVT_AVG==1 && confidence < 0.01)) // confidence < 0.01 should not be checked when averaged
-          {
-            NDF=0; // prbably not needed, but just in case
-            cout << "Bad fit, skipping..." << endl;
-            if(!ikt_plotted[ikt])
-            {
-              Drho_from_rhohist(histograms[ikt][iframe]);
-              histograms[ikt][iframe]->Draw("pe");
-              canvas->SaveAs(Form("%s/figs/fitting/%s/%s_onedsource_cent%s_%s_ifile%i_ievt%i_ikt%i_ich0_AVG%d_BADFIT.png", 
-                                path, frames[thisframe], isPathUrqmd, centleg[ICENT], energy, ifile, ievt, ikt, NEVT_AVG));
-              ikt_plotted[ikt] = true;
-            }
-            delete minimizer;
-            continue;
-          }
-          if(static_cast<Double_t>(binsInRange) * 0.5 > hitsInRange) // * 3 maybe too strict?;
-          {
-            NDF=0; // prbably not needed, but just in case
-            cout << "Too few hits in histogram to fit, skipping..." << endl;
-            if(!ikt_plotted[ikt])
-            {
-              Drho_from_rhohist(histograms[ikt][iframe]);
-              histograms[ikt][iframe]->Draw("pe");
-              canvas->SaveAs(Form("%s/figs/fitting/%s/%s_onedsource_cent%s_%s_ifile%i_ievt%i_ikt%i_ich0_AVG%d_CANTFIT.png", 
-                                path, frames[thisframe], isPathUrqmd, centleg[ICENT], energy, ifile, ievt, ikt, NEVT_AVG));
-              ikt_plotted[ikt] = true;
-            }
-            delete minimizer;
-            continue;
-          }
+          cout << "Confidence: " << confidence << endl;
           
-          /*
-          gStyle->SetLabelSize(0.06,"Y");
-          canvas->SetLogx(1);
-          canvas->SetLogy(1);
-          canvas->SetRightMargin(0.01);
-          canvas->SetLeftMargin(0.15);
-          canvas->SetTopMargin(0.01);
-          canvas->SetBottomMargin(0.15);
-          */
-          /*
-          gStyle->SetLabelSize(0.04, "XY"); // Set label size for both axes
-          gStyle->SetTitleSize(0.05, "XY"); // Set title size for both axes
-          gStyle->SetTitleOffset(1.2, "X"); // Adjust X-axis title offset
-          gStyle->SetTitleOffset(1.5, "Y"); // Adjust Y-axis title offset
-          
-          canvas->SetLogx(1);
-          canvas->SetLogy(1);
-          canvas->SetRightMargin(0.05);
-          canvas->SetLeftMargin(0.15);
-          canvas->SetTopMargin(0.10);
-          canvas->SetBottomMargin(0.15);
-          */
-
+          const char* fitQuality = "GOODFIT";
+          if(fitCovStatus != 3) fitQuality = covstatuses[fitCovStatus];
+          if(fitStatus != 0) fitQuality = statuses[fitStatus];
+          if(results[0] < 0.55 || results[0] > 1.95) fitQuality = "alpha_out_of_bounds";
+          if(results[1] < 0.05 || results[1] > 14.95) fitQuality = "R_out_of_bounds";
+          if(results[2] < 0.5 || results[2] > 1.5) fitQuality = "N_out_of_bounds";
+          if(NEVT_AVG==1 && confidence < 0.01) fitQuality = "conf_too_low"; // confidence < 0.01 should not be checked when averaged
+          if(static_cast<Double_t>(binsInRange) * 0.5 > hitsInRange) fitQuality = "too_few_hits";
+        
           // Here, among others, creating D(rho) from rho hists (normalising to 1)
           Drho_from_rhohist(histograms[ikt][iframe]);
           
@@ -523,26 +492,7 @@ int main(int argc, char *argv[])
           double N = results[2];
           double dN = errors[2];
 
-          alphahist[ikt]->Fill(alpha);
-          Rhist[ikt]->Fill(R);
-          cerr << "Filling alpha vs R histogram ikt " << ikt << " with alpha,R: " << alpha << "," << R << endl;
-          alpha_vs_R[ikt]->Fill(alpha,R);
-          alpha_vs_R_all->Fill(alpha,R);
-
-          // Saving to arrays (then vectors):
-          alpha_vec[ikt] = alpha;
-          alpha_errdn_vec[ikt] = dalpha;
-          alpha_errup_vec[ikt] = dalpha;
-          //minimizer->GetMinosError(0, alpha_errdn_vec[ikt], alpha_errup_vec[ikt]);
-          R_vec[ikt] = R;
-          R_errdn_vec[ikt] = dR;
-          R_errup_vec[ikt] = dR;
-          //minimizer->GetMinosError(1, R_errdn_vec[ikt], R_errup_vec[ikt]);
-          N_vec[ikt] = N;
-          N_errup_vec[ikt] = dN;
-          N_errdn_vec[ikt] = dN;
-          //minimizer->GetMinosError(2, N_errdn_vec[ikt], N_errup_vec[ikt]);
-
+          
           f_levyfunc->SetParameters(alpha,R,N);
           //histograms[ikt][iframe]->GetXaxis()->SetLabelSize(0.08);
           //histograms[ikt][iframe]->GetXaxis()->SetLabelOffset(-0.03);
@@ -569,9 +519,6 @@ int main(int argc, char *argv[])
           Tl.DrawLatexNDC(0.58, 0.68, Form("#chi^{2}/NDF = %.1f / %d", chi2val, NDF));
           Tl.DrawLatexNDC(0.58, 0.63, Form("C.L. = %.2f%%", 100 * conflev));
           
-          delete minimizer;
-          delete f_levyfunc;
-
           // Add a title using TLatex for better customization
           const char* isPathUrqmdTitle = IsUrQMD ? "UrQMD" : "EPOS4"; // FIXME prbly isPathUrQMD would do as well ("EPOS" instead of "EPOS4", who cares)
           TLatex title;
@@ -588,35 +535,73 @@ int main(int argc, char *argv[])
           //if(ievt == 10 && ifile == 1) canvas->SaveAs(Form("%s/figs/fitting/%s/onedsource_cent%s_%s_ifile%i_ievt%i_ikt%i_ich0.png", path, frames[thisframe], centleg[ICENT], energy, ifile, ievt, ikt));
           if(!ikt_plotted[ikt])
           {
-            canvas->SaveAs(Form("%s/figs/fitting/%s/%s_onedsource_cent%s_%s_ifile%i_ievt%i_ikt%i_ich0_AVG%d.png", 
-                                path, frames[thisframe], isPathUrqmd, centleg[ICENT], energy, ifile, ievt, ikt, NEVT_AVG));
-            ikt_plotted[ikt] = true;
+            const char* fitQualityTag = (strcmp(fitQuality,"GOODFIT") == 0) ? "" : Form("_BADFIT_%s",fitQuality);
+            canvas->SaveAs(Form("%s/figs/fitting/%s/%s_onedsource_cent%s_%s_ifile%i_ievt%i_ikt%i_ich0_AVG%d%s.png", 
+                                path, frames[thisframe], isPathUrqmd, centleg[ICENT], energy, ifile, ievt, ikt, NEVT_AVG, 
+                                fitQualityTag));
+            ikt_plotted[ikt] = true; // FIXME uncomment to only save first per ikt
+            canvas->Clear();
           }
+
+          if(strcmp(fitQuality, "GOODFIT") != 0)
+          {
+            NDF=0; // prbably not needed, but just in case
+            cout << "Bad fit, skipping saving. Reason: " << fitQuality << endl;
+            
+            delete minimizer;
+            continue;
+          }
+          
+          // SAVING results
+          Ngoodfits++;
+          alphahist[ikt]->Fill(alpha);
+          Rhist[ikt]->Fill(R);
+          Nhist[ikt]->Fill(N);
+          cerr << "Filling alpha vs R histogram ikt " << ikt << " with alpha,R: " << alpha << "," << R << endl;
+          alpha_vs_R[ikt]->Fill(alpha,R);
+          alpha_vs_R_all->Fill(alpha,R);
+
+          // Saving to arrays (then vectors):
+          alpha_vec[ikt] = alpha;
+          alpha_errdn_vec[ikt] = dalpha;
+          alpha_errup_vec[ikt] = dalpha;
+          //minimizer->GetMinosError(0, alpha_errdn_vec[ikt], alpha_errup_vec[ikt]);
+          R_vec[ikt] = R;
+          R_errdn_vec[ikt] = dR;
+          R_errup_vec[ikt] = dR;
+          //minimizer->GetMinosError(1, R_errdn_vec[ikt], R_errup_vec[ikt]);
+          N_vec[ikt] = N;
+          N_errup_vec[ikt] = dN;
+          N_errdn_vec[ikt] = dN;
+          //minimizer->GetMinosError(2, N_errdn_vec[ikt], N_errup_vec[ikt]);
+          confidencehist->Fill(conflev);
+          
+          delete minimizer;
+          delete f_levyfunc;
         } // end of iframe loop
-        canvas->Clear();
+        //canvas->Clear();
       } // end of ikt loop
       
-      if(stillAveraging) continue; // if still averaging, do not save anything
-      // new TGraphAsymmErrors + put in the vector
-      TGraphAsymmErrors* alpha_vs_kt = new TGraphAsymmErrors(NKT, ktbin_centers, alpha_vec, xLow, xHigh, alpha_errdn_vec, alpha_errup_vec);
-      alpha_vs_kt->SetTitle(Form("#alpha(K_{T}), #sqrt{s_{NN}}=%s;K_{T} (GeV/c);#alpha",energy));
-      alpha_vs_kt->SetName(Form("alpha_vs_kt_%d", Ngoodfits));
-      TGraphAsymmErrors* R_vs_kt = new TGraphAsymmErrors(NKT, ktbin_centers, R_vec, xLow, xHigh, R_errdn_vec, R_errup_vec);
-      R_vs_kt->SetTitle(Form("#R(K_{T}), #sqrt{s_{NN}}=%s;K_{T} (GeV/c);#R",energy));
-      R_vs_kt->SetName(Form("R_vs_kt_%d", Ngoodfits));
-      TGraphAsymmErrors* N_vs_kt = new TGraphAsymmErrors(NKT, ktbin_centers, N_vec, xLow, xHigh, N_errdn_vec, N_errup_vec);
-      N_vs_kt->SetTitle(Form("#N(K_{T}), #sqrt{s_{NN}}=%s;K_{T} (GeV/c);#N",energy));
-      N_vs_kt->SetName(Form("N_vs_kt_%d", Ngoodfits));
+      if(averagingComplete) // MOVED OUTSIDE: only create graphs when averaging is complete
+      {
+        TGraphAsymmErrors* alpha_vs_kt = new TGraphAsymmErrors(NKT, ktbin_centers, alpha_vec, xLow, xHigh, alpha_errdn_vec, alpha_errup_vec);
+        alpha_vs_kt->SetTitle(Form("#alpha(K_{T}), #sqrt{s_{NN}}=%s;K_{T} (GeV/c);#alpha",energy));
+        alpha_vs_kt->SetName(Form("alpha_vs_kt_%d", Ngoodfits));
+        TGraphAsymmErrors* R_vs_kt = new TGraphAsymmErrors(NKT, ktbin_centers, R_vec, xLow, xHigh, R_errdn_vec, R_errup_vec);
+        R_vs_kt->SetTitle(Form("#R(K_{T}), #sqrt{s_{NN}}=%s;K_{T} (GeV/c);#R",energy));
+        R_vs_kt->SetName(Form("R_vs_kt_%d", Ngoodfits));
+        TGraphAsymmErrors* N_vs_kt = new TGraphAsymmErrors(NKT, ktbin_centers, N_vec, xLow, xHigh, N_errdn_vec, N_errup_vec);
+        N_vs_kt->SetTitle(Form("#N(K_{T}), #sqrt{s_{NN}}=%s;K_{T} (GeV/c);#N",energy));
+        N_vs_kt->SetName(Form("N_vs_kt_%d", Ngoodfits));
 
-      //if(stillAveraging) continue; // if still averaging, do not save anything
-      alpha_vs_KT_all.push_back(alpha_vs_kt);
-      R_vs_KT_all.push_back(R_vs_kt);
-      N_vs_KT_all.push_back(N_vs_kt);
-      
-      Ngoodfits++; // does this even count anything useful?
-      firstplot = false; // do not plot more than 1 from each kT
-    } // end of ievt loop
-  } // end of ifile loop
+        alpha_vs_KT_all.push_back(alpha_vs_kt);
+        R_vs_KT_all.push_back(R_vs_kt);
+        N_vs_KT_all.push_back(N_vs_kt);
+        
+        Ngoodfits++;
+      }
+    } // end ievt
+  } // end ifile
   delete canvas;
   delete myLevy_reader;
   cout << "about to close input file." << endl;
@@ -637,6 +622,7 @@ int main(int argc, char *argv[])
     //alphahist[ikt]->Write(); // these two will not be used is alpha_vs_R_all and the TGraphAsymmErrors vectors are written out
     //Rhist[ikt]->Write();
     alpha_vs_R[ikt]->Write();
+    Nhist[ikt]->Write(); // I could put this with alpha and R together in TH3, but stick with this for now
   }
   alpha_vs_R_all->Write();
   cout << "histograms written." << endl;
