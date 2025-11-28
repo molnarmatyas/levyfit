@@ -266,28 +266,11 @@ int main(int argc, char *argv[])
     xLow[ikt] = binWidth / 2.;
     xHigh[ikt] = binWidth / 2.;
   }
-  Double_t alpha_vec[NKT]={0};  // FIXME these are in the wrong place initialised - in each bad fit they inherit the previous good fit's value I think!!!
-  Double_t alpha_errup_vec[NKT]={0};
-  Double_t alpha_errdn_vec[NKT]={0};
-  Double_t R_vec[NKT]={0};
-  Double_t R_errup_vec[NKT]={0};
-  Double_t R_errdn_vec[NKT]={0};
-  Double_t N_vec[NKT]={0};
-  Double_t N_errup_vec[NKT]={0};
-  Double_t N_errdn_vec[NKT]={0};
   // For collecting from temporary storages
   int Ngoodfits = 0;
   std::vector<TGraphAsymmErrors*> alpha_vs_KT_all;
   std::vector<TGraphAsymmErrors*> N_vs_KT_all;
   std::vector<TGraphAsymmErrors*> R_vs_KT_all;
-  /*
-  vector<double> alpha_vec;
-  vector<double> alpha_err_vec;
-  vector<double> R_vec;
-  vector<double> R_err_vec;
-  vector<double> N_vec;
-  vector<double> N_err_vec;
-  */
   //vector<double> chi2_vec;
   for(int ikt = 0; ikt < NKT; ikt++)
   {
@@ -325,6 +308,15 @@ int main(int argc, char *argv[])
     for(int ievt = 0; ievt < NEVT; ievt++)
     {
       bool averagingComplete = false; // NEW: track if this is the last event of averaging block
+      Double_t alpha_vec[NKT]={0};  // Fixed to be initialised at the appropriate place
+      Double_t alpha_errup_vec[NKT]={0};
+      Double_t alpha_errdn_vec[NKT]={0};
+      Double_t R_vec[NKT]={0};
+      Double_t R_errup_vec[NKT]={0};
+      Double_t R_errdn_vec[NKT]={0};
+      Double_t N_vec[NKT]={0};
+      Double_t N_errup_vec[NKT]={0};
+      Double_t N_errdn_vec[NKT]={0};
       
       for (int ikt = 0; ikt < NKT; ++ikt)
       {
